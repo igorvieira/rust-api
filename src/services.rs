@@ -3,7 +3,8 @@ use actix_web::{
         scope,
         Json,
         Data,
-        ServiceConfig
+        ServiceConfig,
+        Query
     },
     get,
     post,
@@ -13,7 +14,7 @@ use actix_web::{
 
 use serde_json::json;
 
-use crate::{schema::CreateTaskSchema, model::TaskModel, AppState};
+use crate::{schema::{CreateTaskSchema, FilterOptions}, model::TaskModel, AppState};
 
 
 #[get("/healthchecker")]
@@ -61,15 +62,60 @@ async fn create_task(
                     })
                 )
             }
+
         }
 
 }
 
 
+#[get("/tasks")]
+async fn get_all_tasks(
+    opts: Query<FilterOptions>,
+    data: Data<AppState>
+
+) -> impl Responder {
+    let limit = opts.limit.unwrap_or(10);
+    let offset = (opts.page.unwrap_or(1)- 1) * limit;
+
+
+    match
+        sqlx::query_as!(
+        TaskModel,
+            "SELECT * FROM tasks ORDER by id LIMIT $1 OFFSET $2",
+            limit as i32,
+            offset as i32,
+        )
+        .fetch_all(&data.db)    
+        .await {
+            Ok(tasks) => {
+                let json_response = json!({
+                    "status": "success",
+                    "result":  tasks.len(),
+                    "tasks": tasks
+                });
+
+                return HttpResponse::Ok().json(json_response);
+            }
+            Err(error) => {
+
+                return HttpResponse::InternalServerError().json(
+                    json!({
+                        "status": "error",
+                        "message": format!("{:?}", error)
+                    })
+                )
+            }
+
+        }
+
+    
+}
+
 pub fn config(conf:  &mut ServiceConfig) {
     let scope = scope("/api")
             .service(health_checker)
-            .service(create_task);
+            .service(create_task)
+            .service(get_all_tasks);
 
 
     conf.service(scope);
