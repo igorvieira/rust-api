@@ -1,3 +1,5 @@
+mod schema;
+mod model;
 mod services;
 
 use actix_web::{
