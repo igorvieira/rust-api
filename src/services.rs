@@ -2,6 +2,7 @@ use actix_web::{
     web::{
         scope,
         Json,
+        Path,
         Data,
         ServiceConfig,
         Query
@@ -13,6 +14,7 @@ use actix_web::{
 };
 
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::{schema::{CreateTaskSchema, FilterOptions}, model::TaskModel, AppState};
 
@@ -33,7 +35,7 @@ async fn create_task(
     data: Data<AppState>
 ) -> impl Responder {
 
-    match 
+    match
         sqlx::query_as!(
             TaskModel,
             "INSERT INTO tasks (title, content) VALUES ($1, $2)
@@ -85,7 +87,7 @@ async fn get_all_tasks(
             limit as i32,
             offset as i32,
         )
-        .fetch_all(&data.db)    
+        .fetch_all(&data.db)
         .await {
             Ok(tasks) => {
                 let json_response = json!({
@@ -105,17 +107,63 @@ async fn get_all_tasks(
                     })
                 )
             }
+        }
+
+
+}
+
+
+#[get("/tasks/{id}")]
+async fn get_task_by_id(
+    path: Path<Uuid>,
+    data: Data<AppState>
+) -> impl Responder {
+    let task_id = path.into_inner();
+
+    match
+        sqlx::query_as!(
+            TaskModel,
+            "SELECT * FROM tasks WHERE id = $1", task_id
+        )
+        .fetch_one(&data.db)
+        .await {
+            Ok(task) => {
+                let task_note = json!({
+                    "status": "success",
+                    "task": task
+                });
+
+
+               return HttpResponse::Ok().json(task_note);
+            }
+
+            Err(error) => {
+
+                return HttpResponse::InternalServerError().json(
+                    json!({
+                        "status": "error",
+                        "message": format!("{:?}", error)
+                    })
+                )
+            }
+
 
         }
 
-    
+
 }
+
+
+
+
 
 pub fn config(conf:  &mut ServiceConfig) {
     let scope = scope("/api")
             .service(health_checker)
             .service(create_task)
-            .service(get_all_tasks);
+            .service(get_all_tasks)
+            .service(get_task_by_id);
+
 
 
     conf.service(scope);
