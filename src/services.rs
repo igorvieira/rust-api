@@ -9,8 +9,9 @@ use actix_web::{
     },
     get,
     post,
+    delete,
     HttpResponse,
-    Responder
+    Responder,
 };
 
 use serde_json::json;
@@ -153,6 +154,38 @@ async fn get_task_by_id(
 
 }
 
+#[delete("/tasks/{id}")]
+async fn delete_task_by_id(
+    path: Path<Uuid>,
+    data: Data<AppState>
+) -> impl Responder {
+    let task_id = path.into_inner();
+
+    match
+        sqlx::query_as!(
+            TaskModel,
+            "DELETE FROM tasks WHERE id = $1", task_id
+        )
+        .execute(&data.db)
+        .await {
+            Ok(_) => {
+                return HttpResponse::NoContent().finish();
+            }
+
+            Err(error) => {
+
+                return HttpResponse::InternalServerError().json(
+                    json!({
+                        "status": "error",
+                        "message": format!("{:?}", error)
+                    })
+                )
+            }
+        }
+}
+
+
+
 
 
 
@@ -162,7 +195,8 @@ pub fn config(conf:  &mut ServiceConfig) {
             .service(health_checker)
             .service(create_task)
             .service(get_all_tasks)
-            .service(get_task_by_id);
+            .service(get_task_by_id)
+            .service(delete_task_by_id);
 
 
 
