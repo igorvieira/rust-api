@@ -10,6 +10,7 @@ use actix_web::{
     get,
     post,
     delete,
+    patch,
     HttpResponse,
     Responder,
 };
@@ -17,7 +18,8 @@ use actix_web::{
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::{schema::{CreateTaskSchema, FilterOptions}, model::TaskModel, AppState};
+use crate::{schema::{CreateTaskSchema, FilterOptions, UpdateTaskSchema}, model::TaskModel, AppState};
+
 
 
 #[get("/healthchecker")]
@@ -186,7 +188,63 @@ async fn delete_task_by_id(
 
 
 
+#[patch("/tasks/{id}")]
+async fn update_task_by_id(
+    path: Path<Uuid>,
+    body: Json<UpdateTaskSchema>,
+    data: Data<AppState>
+) -> impl Responder {
+    let task_id = path.into_inner();
 
+    match
+        sqlx::query_as!(
+            TaskModel,
+            "SELECT * FROM tasks WHERE id = $1",
+            task_id
+        )
+        .fetch_one(&data.db)
+        .await {
+            Ok(task) => {
+                
+                match
+                    sqlx::query_as!(
+                        TaskModel,
+                        "UPDATE tasks SET title = $1, content = $2 WHERE id = $3 RETURNING *",
+                        body.title.to_owned().unwrap_or(task.title),
+                        body.content.to_owned().unwrap_or(task.content),
+                        task_id
+                    )
+                    .fetch_one(&data.db)    
+                    .await {
+                        Ok(task) => {
+                            let task_response = json!({
+                                "status" : "success",
+                                "task" : task
+                            });
+
+                            return HttpResponse::Ok().json(task_response)
+                        }
+                        Err(error) => {
+                            let message = format!("{:?}", error);
+                            return HttpResponse::InternalServerError().json(json!({
+                                "status" : "error",
+                                "message" : message
+                            }))
+
+                        }
+                    }
+
+
+            }
+            Err(error) => {
+                let message = format!("{:?}", error);
+                return HttpResponse::NotFound().json(json!({
+                    "status" : "not found",
+                    "message" :  message
+                }))
+            }
+        }
+}
 
 
 
@@ -196,7 +254,8 @@ pub fn config(conf:  &mut ServiceConfig) {
             .service(create_task)
             .service(get_all_tasks)
             .service(get_task_by_id)
-            .service(delete_task_by_id);
+            .service(delete_task_by_id)
+            .service(update_task_by_id);
 
 
 

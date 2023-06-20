@@ -11,3 +11,10 @@ pub struct FilterOptions {
     pub page: Option<usize>,
     pub limit: Option<usize>,
 }
+
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UpdateTaskSchema {
+    pub title: Option<String>,
+    pub content: Option<String>,
+}
