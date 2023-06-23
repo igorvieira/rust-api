@@ -1,5 +1,5 @@
 # Rust API
-> Boilerplate Rust API 🦀
+> Rust API Boilerplate 🦀
 
 
 ## Build Setup
